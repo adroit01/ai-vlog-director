@@ -18,7 +18,7 @@ from database.models import VlogJob, VlogSegment
 from api.schemas import ProcessVlogRequest, VlogJobResponse
 from services.agent import run_vlog_agent
 from services.tts import get_tts_adapter
-from services.video import assemble_final_video
+from services.video import VideoPostProcessingService
 from moviepy import VideoFileClip
 
 router = APIRouter(prefix="/api/vlog", tags=["vlog"])
@@ -139,7 +139,7 @@ async def process_vlog_pipeline(job_id: str):
             # Render video
             # Assemble video is run in standard thread since MoviePy/FFmpeg write blockingly
             success = await asyncio.to_thread(
-                assemble_final_video,
+                VideoPostProcessingService.assemble_final_video,
                 video_path=video_path,
                 output_path=str(output_path),
                 voiceover_paths=voiceover_paths,

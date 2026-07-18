@@ -88,3 +88,14 @@ def test_video_description_caching():
         if p.exists():
             p.unlink()
 
+def test_video_post_processing_service_rotation():
+    from services.video import VideoPostProcessingService
+    with patch("subprocess.run") as mock_run:
+        mock_result = MagicMock()
+        mock_result.stdout = '{"streams": [{"side_data_list": [{"rotation": 90}]}]}'
+        mock_run.return_value = mock_result
+        
+        rotation = VideoPostProcessingService.get_video_rotation("dummy_path.mp4")
+        assert rotation == 90
+        mock_run.assert_called_once()
+
