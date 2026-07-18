@@ -118,15 +118,12 @@ class VideoPostProcessingService:
         final_audio = None
         final_video = None
         
+        temp_output_path = output_path + ".tmp.mp4"
         try:
             video = VideoFileClip(video_path)
             
-            # Detect rotation from metadata via ffprobe and apply correction to maintain input aspect ratio in output
+            # Detect rotation from metadata via ffprobe
             rotation = cls.get_video_rotation(video_path)
-            if rotation != 0:
-                logger.info(f"[VideoPostProcessingService] Detected rotation metadata: {rotation} degrees. Applying correction...")
-                video = video.rotated(rotation, expand=True)
-                
             video_duration = video.duration
             
             # 1. Process audio clips (excluding original video audio per request)
@@ -169,13 +166,37 @@ class VideoPostProcessingService:
             final_audio = CompositeAudioClip(audio_clips)
             final_video = video.with_audio(final_audio)
             
+            # Write to a temporary file first
             final_video.write_videofile(
-                output_path,
+                temp_output_path,
                 codec="libx264",
                 audio_codec="aac",
                 threads=4,
                 logger=None
             )
+            
+            # 5. Apply orientation metadata to match input video presentation
+            if rotation != 0:
+                logger.info(f"[VideoPostProcessingService] Injecting rotation metadata: {rotation} degrees into final output...")
+                import imageio_ffmpeg
+                ffmpeg_bin = imageio_ffmpeg.get_ffmpeg_exe()
+                cmd = f'"{ffmpeg_bin}" -i "{temp_output_path}" -metadata:s:v rotate={rotation} -codec copy "{output_path}" -y'
+                try:
+                    subprocess.run(cmd, shell=True, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                except Exception as ffmpeg_err:
+                    logger.error(f"[VideoPostProcessingService] Failed to inject rotation metadata: {ffmpeg_err}")
+                    if os.path.exists(temp_output_path):
+                        os.rename(temp_output_path, output_path)
+                finally:
+                    if os.path.exists(temp_output_path):
+                        try:
+                            os.remove(temp_output_path)
+                        except Exception:
+                            pass
+            else:
+                if os.path.exists(temp_output_path):
+                    os.rename(temp_output_path, output_path)
+                    
             logger.info(f"[VideoPostProcessingService] Successfully rendered output video at: {output_path}")
             return os.path.exists(output_path)
             
@@ -190,6 +211,11 @@ class VideoPostProcessingService:
                         clip.close()
                     except Exception:
                         pass
+            if os.path.exists(temp_output_path):
+                try:
+                    os.remove(temp_output_path)
+                except Exception:
+                    pass
 
 # Backward compatibility functions pointing to the class implementation
 def get_or_create_music(vibe: str, duration: float) -> str:
