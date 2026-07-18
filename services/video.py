@@ -125,7 +125,7 @@ class VideoPostProcessingService:
             rotation = cls.get_video_rotation(video_path)
             if rotation != 0:
                 logger.info(f"[VideoPostProcessingService] Detected rotation metadata: {rotation} degrees. Applying correction...")
-                video = video.rotated(-rotation, expand=True)
+                video = video.rotated(rotation, expand=True)
                 
             video_duration = video.duration
             
