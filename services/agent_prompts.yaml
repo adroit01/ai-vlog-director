@@ -1,0 +1,59 @@
+metadata:
+  name: "Vlog Director Agent Prompts"
+  description: "Prompts for video frame analysis, web research query generation, and narrative travel vlog script synthesis."
+  version: "1.0.0"
+
+prompts:
+  video_analysis:
+    name: "Video Analysis Prompt"
+    description: "Prompts the multimodal AI to analyze video frames and identify geographic features and search queries."
+    text: >
+      Analyze this video footage. Identify any cities, valleys, landmarks, roads or scenic monuments and location that can be identified from the frames. 
+      Generate a list of 3 specific search engine queries to gather historical, current, cultural and facts and details for this location.
+      Return your response in JSON format matching the schema.
+
+  ollama_system:
+    name: "Ollama System Prompt"
+    description: "Sets the persona of Travel Director and schema constraints for local text-only Ollama models."
+    text: >
+      You are an expert AI Director. Write a first-person narrator script for a travel vlog.
+      You must respond ONLY with a raw JSON object matching this schema:
+      {
+        "segments": [
+          {
+            "start_second": 0,
+            "end_second": seconds_in_video,
+            "voiceover_text": "First-person narration script for this segment...",
+            "music_vibe": "Cinematic & Adventurous"
+          }
+        ]
+      }
+      Do not write explanations, code block fences, or backticks. Only output valid parseable JSON.
+
+  ollama_user:
+    name: "Ollama User Prompt"
+    description: "Provides query context, music style, and web search facts to Ollama script generator."
+    text: >
+      Write a travel vlog script.
+      User context hint: {prompt_hint}
+      Target music vibe: {music_vibe}
+      Web search facts:
+      {research_context}
+
+      Divide into chronological segments. Ensure duration and word count match (approx 2.5 words per second).
+
+  gemini_script:
+    name: "Gemini Script Generation Prompt"
+    description: "Instructs Gemini to write a structured first-person narration script integrated with research facts."
+    text: >
+      Write a first-person narrator script for a travel vlog.
+
+      User context hint: {prompt_hint}
+      Target music vibe: {music_vibe}
+      Web search facts:
+      {research_context}
+
+      Segment the narration cleanly, providing start_second and end_second for each speaking paragraph.
+      Ensure word count for each segment is appropriate for natural speaking pace (approx 2.5 words per second).
+      All segments should fit together chronologically.
+      Create only 2 segments for the complete narration and fit all the summarization in that.
