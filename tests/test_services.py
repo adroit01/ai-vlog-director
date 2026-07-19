@@ -99,3 +99,18 @@ def test_video_post_processing_service_rotation():
         assert rotation == 90
         mock_run.assert_called_once()
 
+@pytest.mark.asyncio
+async def test_missing_gemini_api_key_raises_exception_and_routes_to_error_node():
+    from services.agent import run_vlog_agent
+    from config import settings
+    
+    with patch.object(settings, "GEMINI_API_KEY", ""):
+        result = await run_vlog_agent(
+            video_path="/path/to/uncached_test_video--v_99999999.mp4",
+            model_name="gemini-2.5-flash"
+        )
+        assert result.get("error") is not None
+        assert "GEMINI_API_KEY is not set" in result["error"]
+        assert result.get("script_segments") == []
+
+

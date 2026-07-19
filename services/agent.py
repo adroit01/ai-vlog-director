@@ -80,18 +80,15 @@ async def analyze_video_node(state: AgentState) -> Dict[str, Any]:
         
     # Ollama text-only models require Gemini or Mock fallback for video analysis
     is_ollama = model_name.startswith("ollama/")
-    
-    if not settings.GEMINI_API_KEY:
-        logger.warning("No GEMINI_API_KEY found. Falling back to mock video analysis...")
-        return {
-            "search_queries": ["Rohtang Pass history", "Rohtang Pass motorcycling route"],
-            "error": "Using mock analysis due to missing API key."
-        }
         
     if is_ollama:
-        logger.info(f"Selected model is local Ollama ({model_name}). Using Gemini for visual analysis step...")
+        logger.info(f"Selected model is local Ollama ({model_name}) which is not multimodal so switching to {settings.DEFAULT_ANALYSIS_MODEL} for visual analysis step...")
+        model_name=settings.DEFAULT_ANALYSIS_MODEL
         
     try:
+        if not settings.GEMINI_API_KEY:
+            raise ValueError("GEMINI_API_KEY is not set. Please configure a valid GEMINI_API_KEY in your environment variables.")
+            
         # Upload file to Gemini File API
         logger.info(f"Uploading video {video_path} to Gemini...")
         video_file = await asyncio.to_thread(genai.upload_file, path=video_path)
@@ -107,8 +104,7 @@ async def analyze_video_node(state: AgentState) -> Dict[str, Any]:
             
         logger.info("Ingested video successfully. Prompting Gemini for visual parsing...")
         
-        # Use gemini-1.5-pro or DEFAULT_ANALYSIS_MODEL for structured response
-        model = genai.GenerativeModel(model_name if "gemini" in model_name else settings.DEFAULT_ANALYSIS_MODEL)
+        model = genai.GenerativeModel(model_name)
         
         prompt = get_prompt_resource("video_analysis")
         
@@ -234,8 +230,8 @@ async def generate_script_node(state: AgentState) -> Dict[str, Any]:
             logger.warning(f"Ollama execution failed: {str(e)}. Falling back to mock...")
             model_name = "mock" # trigger mock script generator below
             
-    if not settings.GEMINI_API_KEY or model_name == "mock":
-        logger.info("No GEMINI_API_KEY or model is mock. Generating mock script segments...")
+    if model_name == "mock":
+        logger.info("Model is mock. Generating mock script segments...")
         # Mock script segments based on video duration
         # We assume a 30 second mock video
         return {
@@ -262,6 +258,9 @@ async def generate_script_node(state: AgentState) -> Dict[str, Any]:
         }
 
     try:
+        if not settings.GEMINI_API_KEY:
+            raise ValueError("GEMINI_API_KEY is not set. Please configure a valid GEMINI_API_KEY in your environment variables.")
+            
         # Reconstruct query context from search results
         research_context = ""
         for query, content in search_results.items():
@@ -325,6 +324,13 @@ async def generate_script_node(state: AgentState) -> Dict[str, Any]:
             "error": f"Script gen failed: {str(e)}"
         }
 
+async def handle_error_node(state: AgentState) -> Dict[str, Any]:
+    logger.error(f"Node: handle_error - Agent pipeline halted with error: {state.get('error')}")
+    return {
+        "error": state.get("error", "An unexpected pipeline error occurred."),
+        "script_segments": []
+    }
+
 # Compile Workflow Graph
 def build_agent_graph() -> StateGraph:
     workflow = StateGraph(AgentState)
@@ -333,12 +339,51 @@ def build_agent_graph() -> StateGraph:
     workflow.add_node("analyze_video", analyze_video_node)
     workflow.add_node("research", research_node)
     workflow.add_node("generate_script", generate_script_node)
+    workflow.add_node("handle_error", handle_error_node)
     
+    # Router functions for conditional error branching
+    def route_after_analyze(state: AgentState) -> str:
+        if state.get("error"):
+            return "handle_error"
+        return "research"
+
+    def route_after_research(state: AgentState) -> str:
+        if state.get("error"):
+            return "handle_error"
+        return "generate_script"
+
+    def route_after_script(state: AgentState) -> str:
+        if state.get("error"):
+            return "handle_error"
+        return END
+
     # Add Edges
     workflow.add_edge(START, "analyze_video")
-    workflow.add_edge("analyze_video", "research")
-    workflow.add_edge("research", "generate_script")
-    workflow.add_edge("generate_script", END)
+    workflow.add_conditional_edges(
+        "analyze_video",
+        route_after_analyze,
+        {
+            "handle_error": "handle_error",
+            "research": "research"
+        }
+    )
+    workflow.add_conditional_edges(
+        "research",
+        route_after_research,
+        {
+            "handle_error": "handle_error",
+            "generate_script": "generate_script"
+        }
+    )
+    workflow.add_conditional_edges(
+        "generate_script",
+        route_after_script,
+        {
+            "handle_error": "handle_error",
+            END: END
+        }
+    )
+    workflow.add_edge("handle_error", END)
     
     return workflow.compile()
 
