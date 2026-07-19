@@ -1,6 +1,7 @@
 from typing import List, Optional
 from datetime import datetime
 from sqlmodel import SQLModel, Field, Relationship
+from config import settings
 
 class VlogJob(SQLModel, table=True):
     id: str = Field(default=None, primary_key=True)
@@ -13,7 +14,7 @@ class VlogJob(SQLModel, table=True):
     music_vibe: str = Field(default="Cinematic & Adventurous")
     tts_provider: str = Field(default="edge-tts")
     voice_id: Optional[str] = Field(default=None)
-    model_name: str = Field(default="gemini-2.5-flash")
+    model_name: str = Field(default_factory=lambda: settings.DEFAULT_ANALYSIS_MODEL)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     output_video_path: Optional[str] = Field(default=None)

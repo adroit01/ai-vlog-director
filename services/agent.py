@@ -51,7 +51,7 @@ class CompleteScriptSchema(BaseModel):
 async def analyze_video_node(state: AgentState) -> Dict[str, Any]:
     logger.info("Node: analyze_video")
     video_path = state["video_path"]
-    model_name = state.get("model_name", "gemini-2.5-flash")
+    model_name = state.get("model_name", settings.DEFAULT_ANALYSIS_MODEL)
     
     import os
     from services.video_description import get_video_description, save_video_description
@@ -107,8 +107,8 @@ async def analyze_video_node(state: AgentState) -> Dict[str, Any]:
             
         logger.info("Ingested video successfully. Prompting Gemini for visual parsing...")
         
-        # Use gemini-1.5-pro or gemini-2.5-flash for structured response
-        model = genai.GenerativeModel(model_name if "gemini" in model_name else "gemini-2.5-flash")
+        # Use gemini-1.5-pro or DEFAULT_ANALYSIS_MODEL for structured response
+        model = genai.GenerativeModel(model_name if "gemini" in model_name else settings.DEFAULT_ANALYSIS_MODEL)
         
         prompt = get_prompt_resource("video_analysis")
         
@@ -167,7 +167,7 @@ async def generate_script_node(state: AgentState) -> Dict[str, Any]:
     prompt_hint = state.get("prompt_hint", "")
     music_vibe = state.get("music_vibe", "Cinematic & Adventurous")
     search_results = state.get("search_results", {})
-    model_name = state.get("model_name", "gemini-2.5-flash")
+    model_name = state.get("model_name", settings.DEFAULT_RESEARCH_MODEL)
     
     # 1. Local Ollama Generation Logic
     if model_name.startswith("ollama/"):
@@ -267,7 +267,7 @@ async def generate_script_node(state: AgentState) -> Dict[str, Any]:
         for query, content in search_results.items():
             research_context += f"Query: {query}\nInformation:\n{content}\n\n"
             
-        model = genai.GenerativeModel("gemini-2.5-flash")
+        model = genai.GenerativeModel(model_name if "gemini" in model_name else settings.DEFAULT_RESEARCH_MODEL)
         
         prompt = get_prompt_resource("gemini_script").format(
             prompt_hint=prompt_hint,
@@ -347,9 +347,10 @@ async def run_vlog_agent(
     video_path: str, 
     prompt_hint: Optional[str] = None, 
     music_vibe: str = "Cinematic & Adventurous",
-    model_name: str = "gemini-2.5-flash",
+    model_name: Optional[str] = None,
     job_id: Optional[str] = None
 ) -> Dict[str, Any]:
+    model_name = model_name or settings.DEFAULT_ANALYSIS_MODEL
     app = build_agent_graph()
     initial_state = {
         "video_path": video_path,

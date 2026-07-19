@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field, computed_field
 from typing import List, Optional
 from datetime import datetime
+from config import settings
 
 class ProcessVlogRequest(BaseModel):
     video_id: str = Field(..., description="ID of the uploaded raw video.")
@@ -8,7 +9,7 @@ class ProcessVlogRequest(BaseModel):
     music_vibe: str = Field("Cinematic & Adventurous", description="Background music genre or style.")
     tts_provider: str = Field("edge-tts", description="TTS Provider to use (edge-tts, elevenlabs, bark, mock).")
     voice_id: Optional[str] = Field(None, description="ID of voice preset to use.")
-    model_name: str = Field("gemini-2.5-flash", description="AI Model to run the pipeline.")
+    model_name: Optional[str] = Field(default_factory=lambda: settings.DEFAULT_ANALYSIS_MODEL, description="AI Model to run the pipeline.")
 
 class VlogSegmentResponse(BaseModel):
     start_second: int

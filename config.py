@@ -36,6 +36,10 @@ class Settings:
     # Ollama Host URL
     OLLAMA_HOST: str = os.getenv("OLLAMA_HOST", "http://localhost:11434")
     
+    # Model defaults
+    DEFAULT_ANALYSIS_MODEL: str = os.getenv("DEFAULT_ANALYSIS_MODEL", "gemini-2.5-flash")
+    DEFAULT_RESEARCH_MODEL: str = os.getenv("DEFAULT_RESEARCH_MODEL", "gemini-2.5-flash")
+    
     # Directory paths
     STORAGE_DIR = STORAGE_DIR
     UPLOAD_DIR = UPLOAD_DIR
