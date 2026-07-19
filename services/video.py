@@ -47,6 +47,16 @@ class VideoPostProcessingService:
         return 0
 
     @staticmethod
+    def get_video_duration(video_path: str) -> float:
+        """Returns the duration of the video in seconds using MoviePy VideoFileClip."""
+        try:
+            with VideoFileClip(video_path) as clip:
+                return float(clip.duration)
+        except Exception as e:
+            logger.warning(f"Failed to get video duration: {e}")
+            return 30.0
+
+    @staticmethod
     def get_or_create_music(vibe: str, duration: float) -> str:
         """Gets path to music track for the vibe, or generates a synth fallback loop via FFmpeg."""
         import imageio_ffmpeg

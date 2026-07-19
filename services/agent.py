@@ -14,8 +14,16 @@ from services.prompts import get_prompt_resource
 
 logger = logging.getLogger(__name__)
 
-from langfuse import get_client
-langfuse = get_client()
+from langfuse import Langfuse, get_client
+
+if settings.LANGFUSE_PUBLIC_KEY and settings.LANGFUSE_SECRET_KEY:
+    langfuse = Langfuse(
+        public_key=settings.LANGFUSE_PUBLIC_KEY,
+        secret_key=settings.LANGFUSE_SECRET_KEY,
+        host=settings.LANGFUSE_HOST
+    )
+else:
+    langfuse = get_client()
 
 
 # Configure Gemini
@@ -31,6 +39,7 @@ class AgentState(TypedDict):
     search_queries: List[str]
     search_results: Dict[str, str]
     script_segments: List[Dict[str, Any]]
+    video_duration: float
     error: Optional[str]
 
 # Structured output Pydantic models
@@ -55,7 +64,9 @@ async def analyze_video_node(state: AgentState) -> Dict[str, Any]:
     
     import os
     from services.video_description import get_video_description, save_video_description
+    from services.video import VideoPostProcessingService
     
+    video_duration = VideoPostProcessingService.get_video_duration(video_path)
     file_name = os.path.basename(video_path)
     
     # Extract filename_prefix
@@ -75,7 +86,8 @@ async def analyze_video_node(state: AgentState) -> Dict[str, Any]:
         ):
             pass
         return {
-            "search_queries": cached_desc.get("queries", [])
+            "search_queries": cached_desc.get("queries", []),
+            "video_duration": video_duration
         }
         
     # Ollama text-only models require Gemini or Mock fallback for video analysis
@@ -130,14 +142,13 @@ async def analyze_video_node(state: AgentState) -> Dict[str, Any]:
         parsed = json.loads(response.text)
         save_video_description(filename_prefix, response.text)
         return {
-            "search_queries": parsed.get("queries", [])
+            "search_queries": parsed.get("queries", []),
+            "video_duration": video_duration
         }
         
     except Exception as e:
         logger.error(f"analyze_video error: {str(e)}", exc_info=True)
-        # Graceful fallback to mock queries
         return {
-            "search_queries": ["Beautiful mountain roads", "Scenic driving routes"],
             "error": f"Analysis failed: {str(e)}"
         }
 
@@ -163,7 +174,9 @@ async def generate_script_node(state: AgentState) -> Dict[str, Any]:
     prompt_hint = state.get("prompt_hint", "")
     music_vibe = state.get("music_vibe", "Cinematic & Adventurous")
     search_results = state.get("search_results", {})
-    model_name = state.get("model_name", settings.DEFAULT_RESEARCH_MODEL)
+    model_name = state.get("model_name", settings.DEFAULT_SCRIPT_MODEL)
+    video_duration = state.get("video_duration", 30.0)
+    video_duration_sec = int(round(video_duration))
     
     # 1. Local Ollama Generation Logic
     if model_name.startswith("ollama/"):
@@ -174,11 +187,10 @@ async def generate_script_node(state: AgentState) -> Dict[str, Any]:
         for query, content in search_results.items():
             research_context += f"Query: {query}\nInformation:\n{content}\n\n"
             
-        system_prompt = get_prompt_resource("ollama_system")
-        
-        user_prompt = get_prompt_resource("ollama_user").format(
+        prompt = get_prompt_resource("narration_script_prompt").format(
             prompt_hint=prompt_hint,
             music_vibe=music_vibe,
+            video_duration=video_duration_sec,
             research_context=research_context
         )
         
@@ -187,7 +199,7 @@ async def generate_script_node(state: AgentState) -> Dict[str, Any]:
                 as_type="generation",
                 name="ollama_script_generation",
                 model=ollama_model,
-                input={"system_prompt": system_prompt, "user_prompt": user_prompt}
+                input={"prompt": prompt}
             ) as generation:
                 async with httpx.AsyncClient() as client:
                     response = await client.post(
@@ -195,8 +207,7 @@ async def generate_script_node(state: AgentState) -> Dict[str, Any]:
                         json={
                             "model": ollama_model,
                             "messages": [
-                                {"role": "system", "content": system_prompt},
-                                {"role": "user", "content": user_prompt}
+                                {"role": "user", "content": prompt}
                             ],
                             "options": {
                                 "temperature": 0.7
@@ -217,7 +228,7 @@ async def generate_script_node(state: AgentState) -> Dict[str, Any]:
                         for s in segments:
                             dict_segments.append({
                                 "start_second": int(s.get("start_second", 0)),
-                                "end_second": int(s.get("end_second", 10)),
+                                "end_second": int(s.get("end_second", video_duration_sec)),
                                 "voiceover_text": s.get("voiceover_text", ""),
                                 "music_vibe": s.get("music_vibe", music_vibe)
                             })
@@ -227,30 +238,25 @@ async def generate_script_node(state: AgentState) -> Dict[str, Any]:
                     else:
                         raise Exception(f"Ollama server returned {response.status_code}")
         except Exception as e:
-            logger.warning(f"Ollama execution failed: {str(e)}. Falling back to mock...")
-            model_name = "mock" # trigger mock script generator below
+            logger.error(f"Ollama execution failed: {str(e)}", exc_info=True)
+            return {
+                "error": f"Ollama execution failed: {str(e)}"
+            }
             
     if model_name == "mock":
         logger.info("Model is mock. Generating mock script segments...")
-        # Mock script segments based on video duration
-        # We assume a 30 second mock video
+        mid_point = video_duration_sec // 2
         return {
             "script_segments": [
                 {
                     "start_second": 0,
-                    "end_second": 10,
+                    "end_second": mid_point,
                     "voiceover_text": f"Hey everyone! Today we are hitting the road. {prompt_hint or 'Enjoy this beautiful scenic view!'}",
                     "music_vibe": music_vibe
                 },
                 {
-                    "start_second": 10,
-                    "end_second": 20,
-                    "voiceover_text": "The wind is in our faces and the scenery is absolutely breathtaking. This is what travel is all about.",
-                    "music_vibe": music_vibe
-                },
-                {
-                    "start_second": 20,
-                    "end_second": 30,
+                    "start_second": mid_point,
+                    "end_second": video_duration_sec,
                     "voiceover_text": "Thanks for tagging along! Don't forget to like and subscribe for more adventures.",
                     "music_vibe": music_vibe
                 }
@@ -266,11 +272,12 @@ async def generate_script_node(state: AgentState) -> Dict[str, Any]:
         for query, content in search_results.items():
             research_context += f"Query: {query}\nInformation:\n{content}\n\n"
             
-        model = genai.GenerativeModel(model_name if "gemini" in model_name else settings.DEFAULT_RESEARCH_MODEL)
+        model = genai.GenerativeModel(model_name if "gemini" in model_name else settings.DEFAULT_SCRIPT_MODEL)
         
-        prompt = get_prompt_resource("gemini_script").format(
+        prompt = get_prompt_resource("narration_script_prompt").format(
             prompt_hint=prompt_hint,
             music_vibe=music_vibe,
+            video_duration=video_duration_sec,
             research_context=research_context
         )
         
@@ -311,17 +318,8 @@ async def generate_script_node(state: AgentState) -> Dict[str, Any]:
         
     except Exception as e:
         logger.error(f"generate_script error: {str(e)}", exc_info=True)
-        # Fallback script
         return {
-            "script_segments": [
-                {
-                    "start_second": 0,
-                    "end_second": 15,
-                    "voiceover_text": f"Cruising through some incredible locations. {prompt_hint}",
-                    "music_vibe": music_vibe
-                }
-            ],
-            "error": f"Script gen failed: {str(e)}"
+            "error": f"Script generation failed: {str(e)}"
         }
 
 async def handle_error_node(state: AgentState) -> Dict[str, Any]:
@@ -405,6 +403,7 @@ async def run_vlog_agent(
         "search_queries": [],
         "search_results": {},
         "script_segments": [],
+        "video_duration": 30.0,
         "error": None
     }
     
@@ -434,4 +433,9 @@ async def run_vlog_agent(
             logger.error(f"Failed to initialize Langfuse callback handler: {str(e)}", exc_info=True)
             
     result = await app.ainvoke(initial_state, config=config)
+    try:
+        if hasattr(langfuse, "flush"):
+            langfuse.flush()
+    except Exception as e:
+        logger.warning(f"Failed to flush Langfuse traces: {e}")
     return result

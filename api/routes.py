@@ -376,7 +376,10 @@ async def get_models():
     models = {
         "gemini": [
             {"id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash (Recommended)"},
-            {"id": "gemini-1.5-flash", "name": "Gemini 1.5 Flash"}
+            {"id": "gemini-2.5-flash-lite", "name": "Gemini 2.5 Flash Lite"},
+            {"id": "gemini-3-flash", "name": "Gemini 3 Flash"},
+            {"id": "gemini-3.1-flash-lite", "name": "Gemini 3.1 Flash Lite"},
+            {"id": "gemini-3.5-flash", "name": "Gemini 3.5 Flash"}
         ],
         "ollama": []
     }
@@ -389,7 +392,9 @@ async def get_models():
                 data = response.json()
                 ollama_models = data.get("models", [])
                 for m in ollama_models:
-                    name = m.get("name")
+                    name = m.get("name", "")
+                    if "gpt-oss" in name.lower() or "120b" in name.lower():
+                        continue
                     models["ollama"].append({
                         "id": f"ollama/{name}",
                         "name": f"{name} (Local)"

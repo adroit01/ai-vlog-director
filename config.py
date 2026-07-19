@@ -38,7 +38,7 @@ class Settings:
     
     # Model defaults
     DEFAULT_ANALYSIS_MODEL: str = os.getenv("DEFAULT_ANALYSIS_MODEL", "gemini-2.5-flash")
-    DEFAULT_RESEARCH_MODEL: str = os.getenv("DEFAULT_RESEARCH_MODEL", "gemini-2.5-flash")
+    DEFAULT_SCRIPT_MODEL: str = os.getenv("DEFAULT_SCRIPT_MODEL", "gemini-2.5-flash")
     
     # Directory paths
     STORAGE_DIR = STORAGE_DIR
@@ -48,3 +48,12 @@ class Settings:
     DESCRIPTIONS_DIR = DESCRIPTIONS_DIR
 
 settings = Settings()
+
+# Synchronize Langfuse settings with os.environ for OpenTelemetry & Langfuse SDK
+if settings.LANGFUSE_PUBLIC_KEY:
+    os.environ["LANGFUSE_PUBLIC_KEY"] = settings.LANGFUSE_PUBLIC_KEY
+if settings.LANGFUSE_SECRET_KEY:
+    os.environ["LANGFUSE_SECRET_KEY"] = settings.LANGFUSE_SECRET_KEY
+if settings.LANGFUSE_HOST:
+    os.environ["LANGFUSE_HOST"] = settings.LANGFUSE_HOST
+    os.environ["LANGFUSE_BASE_URL"] = settings.LANGFUSE_HOST

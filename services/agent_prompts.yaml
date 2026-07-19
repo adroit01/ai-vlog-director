@@ -12,48 +12,19 @@ prompts:
       Generate a list of 3 specific search engine queries to gather historical, current, cultural and facts and details for this location.
       Return your response in JSON format matching the schema.
 
-  ollama_system:
-    name: "Ollama System Prompt"
-    description: "Sets the persona of Travel Director and schema constraints for local text-only Ollama models."
+  narration_script_prompt:
+    name: "Narration Script Prompt"
+    description: "Instructs AI models to write a structured first-person narration script integrated with research facts and video duration."
     text: >
-      You are an expert AI Director. Write a first-person narrator script for a travel vlog.
-      You must respond ONLY with a raw JSON object matching this schema:
-      {
-        "segments": [
-          {
-            "start_second": 0,
-            "end_second": seconds_in_video,
-            "voiceover_text": "First-person narration script for this segment...",
-            "music_vibe": "Cinematic & Adventurous"
-          }
-        ]
-      }
-      Do not write explanations, code block fences, or backticks. Only output valid parseable JSON.
-
-  ollama_user:
-    name: "Ollama User Prompt"
-    description: "Provides query context, music style, and web search facts to Ollama script generator."
-    text: >
-      Write a travel vlog script.
-      User context hint: {prompt_hint}
-      Target music vibe: {music_vibe}
-      Web search facts:
-      {research_context}
-
-      Divide into chronological segments. Ensure duration and word count match (approx 2.5 words per second).
-
-  gemini_script:
-    name: "Gemini Script Generation Prompt"
-    description: "Instructs Gemini to write a structured first-person narration script integrated with research facts."
-    text: >
-      Write a first-person narrator script for a travel vlog.
+      You are an expert AI Director, Editor and writer. Write a first-person narrator script for a travel vlog.
 
       User context hint: {prompt_hint}
       Target music vibe: {music_vibe}
+      Total video duration: {video_duration} seconds
       Web search facts:
       {research_context}
 
       Segment the narration cleanly, providing start_second and end_second for each speaking paragraph.
-      Ensure word count for each segment is appropriate for natural speaking pace (approx 2.5 words per second).
-      All segments should fit together chronologically.
-      Create only 2 segments for the complete narration and fit all the summarization in that.
+      Ensure word count for each segment is appropriate for natural speaking pace (approx 2 words per second).
+      All segments should fit together chronologically within the total video duration of {video_duration} seconds.
+      Create only 2-3 segments for the complete narration and fit all the summarization in that.
