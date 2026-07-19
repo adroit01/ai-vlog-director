@@ -2,6 +2,7 @@
 .pytest_cache
 __pycache__/
 *.log
+*TEMP_MPY_*
 
 descriptions/
 music/
