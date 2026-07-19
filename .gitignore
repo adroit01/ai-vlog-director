@@ -1,3 +1,16 @@
 .env
 .pytest_cache
 __pycache__/
+*.log
+
+descriptions/
+music/
+storage/outputs/
+storage/uploads/
+storage/temp/
+storage/descriptions/
+storage/music/
+storage/*.db
+
+# Sample videos
+sample_videos/
